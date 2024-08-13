@@ -1,3 +1,4 @@
 data/
+model/
 gnn_env/
 code/__pycache__/

@@ -2,20 +2,21 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import torch
+import torch.nn.functional as F
+from torch_geometric.nn import GCNConv,GATConv,SAGEConv, global_mean_pool
+from torch.nn import Linear, BatchNorm1d, ModuleList
 from torch_geometric.data import Data
 from torch_geometric.utils import from_networkx
-from torch_geometric.nn import GATConv
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 from sentence_transformers import SentenceTransformer
 import ast
-from tqdm import tqdm
-from torch_geometric.nn import GCNConv, SAGEConv
+import matplotlib.pyplot as plt
 import torch_geometric.transforms as T
+from sklearn.metrics import fbeta_score
 
 import config
-from load_and_preprocess import load_first_n_lines, extract_top_21_fos
 
 # Check if CUDA is available
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -23,9 +24,11 @@ print(f"Using device: {device}")
 
 def create_graph(df):
     G = nx.Graph()
+    node_mapping = {}  # To map original IDs to 0-based indices
     
-    for _, row in tqdm(df.iterrows(), total=len(df), desc="Creating nodes"):
-        G.add_node(row['id'], 
+    for i, (_, row) in enumerate(df.iterrows()):
+        node_mapping[row['id']] = i
+        G.add_node(i, 
                    title=row['title'], 
                    year=row['year'],
                    n_citation=row['n_citation'],
@@ -35,17 +38,21 @@ def create_graph(df):
                    authors=row['authors'],
                    fos=row['fos'])
     
-    for _, row in tqdm(df.iterrows(), total=len(df), desc="Creating edges"):
+    for _, row in df.iterrows():
         if isinstance(row['references'], str):
             references = ast.literal_eval(row['references'])
         else:
             references = row['references'] or []
         
-        for ref in references:
-            if ref in df['id'].values:
-                G.add_edge(row['id'], ref)
-    
-    return G
+        try:
+            for ref in references:
+                if ref in node_mapping:
+                    G.add_edge(node_mapping[row['id']], node_mapping[ref])
+        except TypeError:
+            if references in node_mapping:
+                G.add_edge(node_mapping[row['id']], node_mapping[references])
+            
+    return G, node_mapping
 
 sentence_transformer_model = SentenceTransformer('sentence-transformers/all-MiniLM-L12-v2').to(device)
 
@@ -84,9 +91,9 @@ def transform_to_pytorch_geometric(G, features, labels):
     return data
 
 
-class SimpleGNN(torch.nn.Module):
+class SimpleGNN_SAGE(torch.nn.Module):
     def __init__(self, num_features, num_classes):
-        super(SimpleGNN, self).__init__()
+        super(SimpleGNN_SAGE, self).__init__()
         self.conv1 = SAGEConv(num_features, 16)
         self.conv2 = SAGEConv(16, num_classes)
 
@@ -112,10 +119,18 @@ class SimpleGNN(torch.nn.Module):
         x = self.conv2(x, edge_index)
         return torch.log_softmax(x, dim=1)
 
-import torch
-import torch.nn.functional as F
-from torch_geometric.nn import GATConv, GCNConv, global_mean_pool
-from torch.nn import Linear, BatchNorm1d, ModuleList
+class SimpleGCN(torch.nn.Module):
+    def __init__(self, num_features, num_classes):
+        super(SimpleGCN, self).__init__()
+        self.conv1 = GCNConv(num_features, 16)
+        self.conv2 = GCNConv(16, num_classes)
+
+    def forward(self, x, edge_index):
+        x = F.relu(self.conv1(x, edge_index))
+        x = F.dropout(x, training=self.training)
+        x = self.conv2(x, edge_index)
+        return F.log_softmax(x, dim=1)
+
 
 class ComplexGNN(torch.nn.Module):
     def __init__(self, num_features, num_classes, num_layers=4, hidden_dim=64, heads=8, dropout=0.6):
@@ -199,21 +214,54 @@ def train(model, optimizer, criterion, loader, data):
         total_loss += loss.item()
     return total_loss / len(loader)
 
-def test(model, loader, data):
+def evaluate(model, loader, data):
     model.eval()
     correct = 0
+    predictions = []
+    true_labels = []
     for batch in loader:
         with torch.no_grad():
             out = model(data.x, data.edge_index)[batch]
             pred = out.argmax(dim=1)
             correct += pred.eq(data.y[batch]).sum().item()
-    return correct / len(loader.dataset)
+            predictions.extend(pred.cpu().numpy())
+            true_labels.extend(data.y[batch].cpu().numpy())
+    accuracy = correct / len(loader.dataset)
+    f2_score = fbeta_score(true_labels, predictions, beta=2, average='weighted')
+    return accuracy, f2_score
+
+def plot_metrics(train_metrics, val_metrics, test_metrics):
+    epochs = range(1, len(train_metrics['accuracy']) + 1)
+    
+    plt.figure(figsize=(12, 5))
+    
+    plt.subplot(1, 2, 1)
+    plt.plot(epochs, train_metrics['accuracy'], 'b-', label='Train')
+    plt.plot(epochs, val_metrics['accuracy'], 'r-', label='Validation')
+    plt.plot(epochs, test_metrics['accuracy'], 'g-', label='Test')
+    plt.title('Model Accuracy')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.legend()
+    
+    plt.subplot(1, 2, 2)
+    plt.plot(epochs, train_metrics['f2_score'], 'b-', label='Train')
+    plt.plot(epochs, val_metrics['f2_score'], 'r-', label='Validation')
+    plt.plot(epochs, test_metrics['f2_score'], 'g-', label='Test')
+    plt.title('Model F2 Score')
+    plt.xlabel('Epochs')
+    plt.ylabel('F2 Score')
+    plt.legend()
+    
+    plt.tight_layout()
+    plt.savefig(config.results_plot_path)
+    plt.close()
 
 if __name__ == '__main__':    
-    df = load_first_n_lines('data/citation.json', n_lines=1000000)
-    df = extract_top_21_fos(df)
+    df = pd.read_csv(config.filtered_data_path)
     
-    G = create_graph(df)
+    print('Creating graph...')
+    G, node_mapping = create_graph(df)
     print(f"Graph created with {G.number_of_nodes()} nodes and {G.number_of_edges()} edges")
 
     features = extract_features(df)
@@ -222,14 +270,6 @@ if __name__ == '__main__':
     data = transform_to_pytorch_geometric(G, features, labels)
     print(f"PyTorch Geometric Data created with {data.num_nodes} nodes and {data.num_edges} edges")
 
-    # # Remove isolated nodes
-    data = T.RemoveIsolatedNodes()(data)
-
-    # # Add self-loops
-    # data = T.AddSelfLoops()(data)
-
-    print(f"After preprocessing: {data.num_nodes} nodes and {data.num_edges} edges")
-
     # Move data to GPU
     data = data.to(device)
 
@@ -237,14 +277,20 @@ if __name__ == '__main__':
     num_nodes = data.num_nodes
     node_indices = torch.arange(num_nodes)
     train_indices, test_indices = train_test_split(node_indices, test_size=config.test_size, random_state=42)
+    train_indices, val_indices = train_test_split(train_indices, test_size=config.val_size, random_state=42)
 
     # Create DataLoaders
     train_loader = DataLoader(train_indices, batch_size=config.batch_size, shuffle=True)
+    val_loader = DataLoader(val_indices, batch_size=config.batch_size)
     test_loader = DataLoader(test_indices, batch_size=config.batch_size)
 
-    if config.model == 'simple':
+    if config.model == 'SimpleGNN_SAGE':
+        model = SimpleGNN_SAGE(num_features=data.num_node_features, num_classes=data.y.max().item() + 1).to(device)
+    elif config.model == 'SimpleGNN_GAT':
         model = SimpleGNN(num_features=data.num_node_features, num_classes=data.y.max().item() + 1).to(device)
-    elif config.model == 'complex':
+    elif config.model == 'SimpleGCN':
+        model = SimpleGCN(num_features=data.num_node_features, num_classes=data.y.max().item() + 1).to(device)
+    elif config.model == 'ComplexGNN':
         model = ComplexGNN(num_features=data.num_features, 
                         num_classes=data.y.max().item() + 1, 
                         num_layers=config.num_layers, 
@@ -253,12 +299,40 @@ if __name__ == '__main__':
                         dropout=config.dropout).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     criterion = torch.nn.NLLLoss()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
     print("Training started")
+    best_val_acc = 0
+    train_metrics = {'accuracy': [], 'f2_score': []}
+    val_metrics = {'accuracy': [], 'f2_score': []}
+    test_metrics = {'accuracy': [], 'f2_score': []}
+
     for epoch in range(config.n_epochs):
         loss = train(model, optimizer, criterion, train_loader, data)
-        if (epoch + 1) % 10 == 0:
-            test_acc = test(model, test_loader, data)
-            print(f'Epoch {epoch+1}, Loss: {loss:.4f}, Test Accuracy: {test_acc:.4f}')
+        train_acc, train_f2 = evaluate(model, train_loader, data)
+        val_acc, val_f2 = evaluate(model, val_loader, data)
+        test_acc, test_f2 = evaluate(model, test_loader, data)
+        
+        train_metrics['accuracy'].append(train_acc)
+        train_metrics['f2_score'].append(train_f2)
+        val_metrics['accuracy'].append(val_acc)
+        val_metrics['f2_score'].append(val_f2)
+        test_metrics['accuracy'].append(test_acc)
+        test_metrics['f2_score'].append(test_f2)
+        
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            torch.save(model.state_dict(), config.model_path)
+        
+        if (epoch + 1) % 50 == 0 or epoch == 0:
+            print(f'Epoch {epoch+1}, Loss: {loss:.4f}, Train Acc: {train_acc:.4f}, Val Acc: {val_acc:.4f}, Test Acc: {test_acc:.4f}')
 
     print("Training completed")
+    
+    # Plot and save metrics
+    plot_metrics(train_metrics, val_metrics, test_metrics)
+    
+    
+    model.load_state_dict(torch.load(config.model_path))
+    best_test_acc, best_test_f2 = evaluate(model, test_loader, data)
+    print(f"Best model performance - Test Accuracy: {best_test_acc:.4f}, Test F2 Score: {best_test_f2:.4f}")
