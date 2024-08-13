@@ -301,36 +301,37 @@ if __name__ == '__main__':
     criterion = torch.nn.NLLLoss()
     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
-    print("Training started")
-    best_val_acc = 0
-    train_metrics = {'accuracy': [], 'f2_score': []}
-    val_metrics = {'accuracy': [], 'f2_score': []}
-    test_metrics = {'accuracy': [], 'f2_score': []}
+    if config.train:
+        print("Training started")
+        best_val_acc = 0
+        train_metrics = {'accuracy': [], 'f2_score': []}
+        val_metrics = {'accuracy': [], 'f2_score': []}
+        test_metrics = {'accuracy': [], 'f2_score': []}
 
-    for epoch in range(config.n_epochs):
-        loss = train(model, optimizer, criterion, train_loader, data)
-        train_acc, train_f2 = evaluate(model, train_loader, data)
-        val_acc, val_f2 = evaluate(model, val_loader, data)
-        test_acc, test_f2 = evaluate(model, test_loader, data)
-        
-        train_metrics['accuracy'].append(train_acc)
-        train_metrics['f2_score'].append(train_f2)
-        val_metrics['accuracy'].append(val_acc)
-        val_metrics['f2_score'].append(val_f2)
-        test_metrics['accuracy'].append(test_acc)
-        test_metrics['f2_score'].append(test_f2)
-        
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            torch.save(model.state_dict(), config.model_path)
-        
-        if (epoch + 1) % 50 == 0 or epoch == 0:
-            print(f'Epoch {epoch+1}, Loss: {loss:.4f}, Train Acc: {train_acc:.4f}, Val Acc: {val_acc:.4f}, Test Acc: {test_acc:.4f}')
+        for epoch in range(config.n_epochs):
+            loss = train(model, optimizer, criterion, train_loader, data)
+            train_acc, train_f2 = evaluate(model, train_loader, data)
+            val_acc, val_f2 = evaluate(model, val_loader, data)
+            test_acc, test_f2 = evaluate(model, test_loader, data)
+            
+            train_metrics['accuracy'].append(train_acc)
+            train_metrics['f2_score'].append(train_f2)
+            val_metrics['accuracy'].append(val_acc)
+            val_metrics['f2_score'].append(val_f2)
+            test_metrics['accuracy'].append(test_acc)
+            test_metrics['f2_score'].append(test_f2)
+            
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
+                torch.save(model.state_dict(), config.model_path)
+            
+            if (epoch + 1) % 50 == 0 or epoch == 0:
+                print(f'Epoch {epoch+1}, Loss: {loss:.4f}, Train Acc: {train_acc:.4f}, Val Acc: {val_acc:.4f}, Test Acc: {test_acc:.4f}')
 
-    print("Training completed")
+        print("Training completed")
     
-    # Plot and save metrics
-    plot_metrics(train_metrics, val_metrics, test_metrics)
+        # Plot and save metrics
+        plot_metrics(train_metrics, val_metrics, test_metrics)
     
     
     model.load_state_dict(torch.load(config.model_path))

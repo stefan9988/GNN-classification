@@ -1,0 +1,39 @@
+SimpleGNN_SAGE
+Epoch 1, Loss: 2.7761, Train Acc: 0.2345, Val Acc: 0.2316, Test Acc: 0.2346
+Epoch 50, Loss: 0.6083, Train Acc: 0.7845, Val Acc: 0.7388, Test Acc: 0.7476
+Epoch 100, Loss: 0.5659, Train Acc: 0.7972, Val Acc: 0.7312, Test Acc: 0.7393
+Epoch 150, Loss: 0.5481, Train Acc: 0.8038, Val Acc: 0.7286, Test Acc: 0.7384
+Epoch 200, Loss: 0.5333, Train Acc: 0.8102, Val Acc: 0.7268, Test Acc: 0.7349
+Epoch 250, Loss: 0.5235, Train Acc: 0.8137, Val Acc: 0.7226, Test Acc: 0.7329
+Epoch 300, Loss: 0.5224, Train Acc: 0.8152, Val Acc: 0.7192, Test Acc: 0.7265
+Best model performance - Test Accuracy: 0.7477, Test F2 Score: 0.7469
+
+SimpleGNN_GAT
+Epoch 1, Loss: 2.7054, Train Acc: 0.5619, Val Acc: 0.5577, Test Acc: 0.5650
+Epoch 50, Loss: 2.0155, Train Acc: 0.6967, Val Acc: 0.6915, Test Acc: 0.6989
+Epoch 100, Loss: 2.0168, Train Acc: 0.6933, Val Acc: 0.6881, Test Acc: 0.6952
+Epoch 150, Loss: 2.0227, Train Acc: 0.6976, Val Acc: 0.6912, Test Acc: 0.6992
+Epoch 200, Loss: 2.0226, Train Acc: 0.6899, Val Acc: 0.6835, Test Acc: 0.6895
+Epoch 250, Loss: 2.0111, Train Acc: 0.6958, Val Acc: 0.6886, Test Acc: 0.6967
+Epoch 300, Loss: 2.0100, Train Acc: 0.6900, Val Acc: 0.6832, Test Acc: 0.6912
+Best model performance - Test Accuracy: 0.6987, Test F2 Score: 0.6867
+
+SimpleGCN
+Epoch 1, Loss: 2.8533, Train Acc: 0.2266, Val Acc: 0.2290, Test Acc: 0.2281
+Epoch 50, Loss: 1.2955, Train Acc: 0.6998, Val Acc: 0.6880, Test Acc: 0.6942
+Epoch 100, Loss: 1.2729, Train Acc: 0.7061, Val Acc: 0.6893, Test Acc: 0.6962
+Epoch 150, Loss: 1.2674, Train Acc: 0.7101, Val Acc: 0.6924, Test Acc: 0.6983
+Epoch 200, Loss: 1.2663, Train Acc: 0.7110, Val Acc: 0.6902, Test Acc: 0.6978
+Epoch 250, Loss: 1.2636, Train Acc: 0.7079, Val Acc: 0.6887, Test Acc: 0.6945
+Epoch 300, Loss: 1.2627, Train Acc: 0.7111, Val Acc: 0.6915, Test Acc: 0.6967
+Best model performance - Test Accuracy: 0.6986, Test F2 Score: 0.6891
+
+ComplexGNN
+Epoch 1, Loss: 2.6872, Train Acc: 0.2607, Val Acc: 0.2583, Test Acc: 0.2619
+Epoch 50, Loss: 0.9898, Train Acc: 0.7356, Val Acc: 0.7107, Test Acc: 0.7183
+Epoch 100, Loss: 0.9210, Train Acc: 0.7490, Val Acc: 0.7149, Test Acc: 0.7219
+Epoch 150, Loss: 0.8883, Train Acc: 0.7590, Val Acc: 0.7152, Test Acc: 0.7226
+Epoch 200, Loss: 0.8655, Train Acc: 0.7708, Val Acc: 0.7182, Test Acc: 0.7243
+Epoch 250, Loss: 0.8453, Train Acc: 0.7779, Val Acc: 0.7187, Test Acc: 0.7265
+Epoch 300, Loss: 0.8306, Train Acc: 0.7792, Val Acc: 0.7181, Test Acc: 0.7252
+Best model performance - Test Accuracy: 0.7262, Test F2 Score: 0.7156
